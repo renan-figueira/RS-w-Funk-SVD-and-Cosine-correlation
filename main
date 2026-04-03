@@ -1,0 +1,344 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyNFQb3GyAz6SIZsKD77ApbU",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/renan-figueira/RS-w-Funk-SVD-and-Cosine-correlation/blob/main/main\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "#**Why use numpy < 2.0?**\n",
+        "\n",
+        "The surprise library, which contains the Funk SVD model, has not yet been updated for the most recent versions of numpy, which is why an older version of the library is used."
+      ],
+      "metadata": {
+        "id": "FEd3FHeIdx2v"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "!pip install \"numpy<2.0\" scikit-surprise"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "JxZSZRLzdjdx",
+        "outputId": "19cfd5e8-14fb-4677-a988-32926f328003"
+      },
+      "execution_count": 2,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Requirement already satisfied: numpy<2.0 in /usr/local/lib/python3.12/dist-packages (1.26.4)\n",
+            "Requirement already satisfied: scikit-surprise in /usr/local/lib/python3.12/dist-packages (1.1.4)\n",
+            "Requirement already satisfied: joblib>=1.2.0 in /usr/local/lib/python3.12/dist-packages (from scikit-surprise) (1.5.3)\n",
+            "Requirement already satisfied: scipy>=1.6.0 in /usr/local/lib/python3.12/dist-packages (from scikit-surprise) (1.16.3)\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "import numpy as np\n",
+        "from google.colab import drive\n",
+        "from surprise import Dataset, Reader, SVD\n",
+        "from sklearn.metrics.pairwise import cosine_similarity"
+      ],
+      "metadata": {
+        "id": "r147fFeidlzR"
+      },
+      "execution_count": 4,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# 1. SETUP AND DATA LOADING"
+      ],
+      "metadata": {
+        "id": "1puKobGCPhG3"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "drive.mount('/content/drive', force_remount=True)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "QNyIyiYNPlZ9",
+        "outputId": "52d50643-2c64-4fcf-a56f-3208789f3abd"
+      },
+      "execution_count": 5,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Mounted at /content/drive\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Path to the dataset folder\n",
+        "path = '/content/drive/MyDrive/sistema de recomendacao/archive/ml-100k/'"
+      ],
+      "metadata": {
+        "id": "Rb9u0SpbPmi4"
+      },
+      "execution_count": 6,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Loading the ratings\n",
+        "rating_columns = ['user_id', 'item_id', 'rating', 'timestamp']\n",
+        "df_ratings = pd.read_csv(f'{path}u.data', sep='\\t', names=rating_columns)"
+      ],
+      "metadata": {
+        "id": "upGEAsWsPqPG"
+      },
+      "execution_count": 7,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Loading the movies (FIXED: added encoding='latin-1')\n",
+        "movie_columns = ['item_id', 'title']\n",
+        "df_movies = pd.read_csv(\n",
+        "    f'{path}u.item',\n",
+        "    sep='|',\n",
+        "    names=movie_columns,\n",
+        "    usecols=[0, 1],\n",
+        "    encoding='latin-1'\n",
+        ")"
+      ],
+      "metadata": {
+        "id": "86-SIZrvdntO"
+      },
+      "execution_count": 8,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Mapping dictionaries (Id -> Title and Title -> Id)\n",
+        "id_to_title = pd.Series(df_movies.title.values, index=df_movies.item_id).to_dict()\n",
+        "title_to_id = pd.Series(df_movies.item_id.values, index=df_movies.title).to_dict()"
+      ],
+      "metadata": {
+        "id": "YmYQrPlgdsyP"
+      },
+      "execution_count": 9,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# 2. SVD MODEL TRAINING"
+      ],
+      "metadata": {
+        "id": "ojNegiIbQDm_"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(\"\\n[1/3] Preparing data for Surprise...\")\n",
+        "reader = Reader(rating_scale=(1, 5))\n",
+        "data = Dataset.load_from_df(df_ratings[['user_id', 'item_id', 'rating']], reader)\n",
+        "full_trainset = data.build_full_trainset()"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "yu4Wo3P5dqRQ",
+        "outputId": "28dd989b-13cd-4f43-c9e2-acfb2d055aac"
+      },
+      "execution_count": 10,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "[1/3] Preparing data for Surprise...\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(\"[2/3] Training the SVD model (Latent Factors)...\")\n",
+        "algo = SVD(n_factors=100, n_epochs=20, random_state=42)\n",
+        "algo.fit(full_trainset)\n",
+        "print(\"Training completed!\")"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "BsFM0xT6Pyzv",
+        "outputId": "0f2e75a3-34b0-4d5e-8fe9-d8a21488bcb3"
+      },
+      "execution_count": 11,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "[2/3] Training the SVD model (Latent Factors)...\n",
+            "Training completed!\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# 3. RECOMMENDATION FUNCTION (Latent Factors + Cosine)"
+      ],
+      "metadata": {
+        "id": "-CsnBkG4P9o5"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "def recommend_similar_movies_svd(movie_title, top_n=10):\n",
+        "    print(f\"\\n[3/3] Finding the {top_n} most similar movies to: '{movie_title}'\\n\")\n",
+        "\n",
+        "    # Check if the input movie exists in the database\n",
+        "    if movie_title not in title_to_id:\n",
+        "        return f\"Error: Movie '{movie_title}' not found. Please check the spelling.\"\n",
+        "\n",
+        "    # Get the Original (Raw) ID and convert it to the model's Inner ID\n",
+        "    movie_raw_id = title_to_id[movie_title]\n",
+        "    movie_inner_id = full_trainset.to_inner_iid(movie_raw_id)\n",
+        "\n",
+        "    # 1. Matrix with the latent factors of all movies ('algo.qi')\n",
+        "    item_factors = algo.qi\n",
+        "\n",
+        "    # 2. Specific factors of our target movie\n",
+        "    movie_vector = item_factors[movie_inner_id]\n",
+        "\n",
+        "    # 3. Calculate cosine similarity (target movie vs all movies)\n",
+        "    similarities = cosine_similarity([movie_vector], item_factors)[0]\n",
+        "\n",
+        "    # 4. Associate similarities with IDs, sort, and slice the top N\n",
+        "    sim_scores = list(enumerate(similarities))\n",
+        "    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)\n",
+        "\n",
+        "    # We take from 1 to top_n+1 to skip index 0 (which is the target movie itself with a score of 1.0)\n",
+        "    top_sim_scores = sim_scores[1:top_n+1]\n",
+        "\n",
+        "    # 5. Map the results and display\n",
+        "    for inner_id, score in top_sim_scores:\n",
+        "        raw_id = int(full_trainset.to_raw_iid(inner_id))\n",
+        "        title = id_to_title.get(raw_id, f\"ID {raw_id} Unknown\")\n",
+        "        print(f\"{title} (Similarity: {score:.4f})\")"
+      ],
+      "metadata": {
+        "id": "QztcJhK6du2U"
+      },
+      "execution_count": 12,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "# 4. EXECUTION"
+      ],
+      "metadata": {
+        "id": "fumPJ02MP5h7"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "recommend_similar_movies_svd('Critical Care (1997)', top_n=10)\n",
+        "\n",
+        "# Try uncommenting the line below to quickly test another movie:\n",
+        "# recommend_similar_movies_svd('Toy Story (1995)', top_n=5)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "oY8e_pVddh-2",
+        "outputId": "94b4658b-a743-447b-a7ac-7ba36f55f609"
+      },
+      "execution_count": 17,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "[3/3] Finding the 10 most similar movies to: 'Critical Care (1997)'\n",
+            "\n",
+            "Umbrellas of Cherbourg, The (Parapluies de Cherbourg, Les) (1964) (Similarity: 0.3275)\n",
+            "Fall (1997) (Similarity: 0.3160)\n",
+            "Schizopolis (1996) (Similarity: 0.2904)\n",
+            "Lawnmower Man 2: Beyond Cyberspace (1996) (Similarity: 0.2802)\n",
+            "Secret Adventures of Tom Thumb, The (1993) (Similarity: 0.2716)\n",
+            "Year of the Horse (1997) (Similarity: 0.2666)\n",
+            "Last Time I Committed Suicide, The (1997) (Similarity: 0.2622)\n",
+            "Clean Slate (1994) (Similarity: 0.2602)\n",
+            "Kiss the Girls (1997) (Similarity: 0.2539)\n",
+            "Collectionneuse, La (1967) (Similarity: 0.2533)\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from google.colab import drive\n",
+        "drive.mount('/content/drive')"
+      ],
+      "metadata": {
+        "id": "yjBEAcdWSDGQ"
+      },
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}
