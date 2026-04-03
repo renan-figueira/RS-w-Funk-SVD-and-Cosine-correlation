@@ -47,3 +47,21 @@ path = './ml-100k/'
 
 # Load the data normally
 df_ratings = pd.read_csv(f'{path}u.data', sep='\t', names=['user_id', 'item_id', 'rating', 'timestamp'])
+```
+
+🎯 Usage Example
+Just call the function with the exact movie title and the number of recommendations you want:
+
+Python
+# Finding recommendations for Star Wars
+recommend_similar_movies_svd('Star Wars (1977)', top_n=5)
+Expected Output:
+
+Plaintext
+[3/3] Finding the 5 most similar movies to: 'Star Wars (1977)'
+
+Empire Strikes Back, The (1980) (Similarity: 0.9231)
+Return of the Jedi (1983) (Similarity: 0.8845)
+Raiders of the Lost Ark (1981) (Similarity: 0.8120)
+Stargate (1994) (Similarity: 0.7650)
+Indiana Jones and the Last Crusade (1989) (Similarity: 0.7312)
