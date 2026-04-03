@@ -56,9 +56,10 @@ Just call the function with the exact movie title and the number of recommendati
 ```Python
 # Finding recommendations for Star Wars
 recommend_similar_movies_svd('Star Wars (1977)', top_n=5)
+```
 Expected Output:
 
-
+```python
 [3/3] Finding the 5 most similar movies to: 'Star Wars (1977)'
 
 Empire Strikes Back, The (1980) (Similarity: 0.9231)
